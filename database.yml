@@ -1,0 +1,78 @@
+---
+Parameters:
+
+  EnvironmentName:
+    Description:  An environment name that will be prefixed to resource names
+    Type: String
+
+  PgSQLMasterUserName:
+    Type: String
+    Default: admin
+    Description: Database admin user name for PgSQL
+
+Resources:
+  PgSQLSecretKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: "Allow"
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  PgSQLSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      KmsKeyId: !Ref PgSQLSecretKey
+      GenerateSecretString:
+        SecretStringTemplate: !Join [ '', [ '{"username": "', !Ref PgSQLMasterUserName, '"}' ] ]
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  PgSQLSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+          GroupDescription: Allow access from private subnets to DB on 5432 
+          VpcId:
+              Fn::ImportValue:
+                  !Sub "${EnvironmentName}-VPC"
+          SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 5432 
+                ToPort: 5432
+                CidrIp: 0.0.0.0/0  
+          SecurityGroupEgress:
+              - IpProtocol: tcp
+                FromPort: 0 
+                ToPort: 65535 
+                CidrIp: 0.0.0.0/0
+  PgSQLSubnetGroup: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: Database Subnet Group
+      SubnetIds: 
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PrivateSubnet1"
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PrivateSubnet2"
+  
+  PgSQLInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      DBName: "postgres"
+      Engine: "postgres"
+      EngineVersion: "13.7"
+      MasterUsername: !Ref PgSQLMasterUserName
+      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref PgSQLSecret, ':SecretString:password}}' ] ]
+      StorageType: gp2
+      AllocatedStorage: 20
+      MultiAZ: False
+      Port: 5432
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref PgSQLSecurityGroup
+      DBSubnetGroupName:
+        !Ref PgSQLSubnetGroup
