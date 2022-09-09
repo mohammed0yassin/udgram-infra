@@ -1,0 +1,51 @@
+version: 2.1
+orbs:
+  aws-cli: circleci/aws-cli@3.1.1
+jobs:
+  create_network:
+    docker:
+      - image: "cimg/base:stable"
+    steps:
+      - aws-cli/setup
+      - checkout
+      - run:
+          name: Create Servers Stack
+          command: |
+            sh ./create.sh --network
+
+  create_servers:
+    docker:
+      - image: "cimg/base:stable"
+    steps:
+      - aws-cli/setup
+      - checkout
+      - run:
+          name: Create Servers Stack
+          command: |
+            sh ./create.sh --servers
+
+  create_database:
+    docker:
+      - image: "cimg/base:stable"
+    steps:
+      - aws-cli/setup
+      - checkout
+      - run:
+          name: Create Servers Stack
+          command: |
+            sh ./create.sh --database
+
+workflows:
+  udagram-infra:
+    jobs:
+      - create_network
+      - hold:
+          type: approval
+          requires: 
+          - create_network
+      - create_servers:
+          requires:
+            - hold
+      - create_database:
+          requires:
+            - hold

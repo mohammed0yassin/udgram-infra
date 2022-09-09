@@ -33,6 +33,12 @@ elif [ "$1" = "--servers" ]; then
     else
         >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
     fi
+elif [ "$1" = "--database" ]; then
+    if [ $SERVERS_STACK_NAME ]; then
+        aws cloudformation delete-stack --stack-name $DATABASE_STACK_NAME
+    else
+        >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
+    fi
 elif [ "$1" = "--help" -o "$1" = "-h" ]; then
     Help
 else
