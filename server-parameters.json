@@ -10,5 +10,9 @@
     {
         "ParameterKey": "WebServerKeyPair",
         "ParameterValue": "backendprivate"
+    },
+    {
+        "ParameterKey": "FrontendBucketName",
+        "ParameterValue": "udagram-fntend-cstm"
     }
 ]

@@ -16,6 +16,11 @@ Parameters:
         Description: The EC2 Key Pair to allow SSH access to the instances
         Type: 'AWS::EC2::KeyPair::KeyName'
         ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+    FrontendBucketName:
+        Description: Frontend S3 Bucket name
+        Type: String
+
 Resources:
 
     BastionHostSecurityGroup:
@@ -23,7 +28,7 @@ Resources:
         Properties:
             GroupDescription: Allow SSH to the Bastion Host
             VpcId:
-                Fn::ImportValue:
+                !ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -41,7 +46,7 @@ Resources:
         Properties:
             GroupDescription: Allow HTTP to our load balancer
             VpcId:
-                Fn::ImportValue:
+                !ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -59,7 +64,7 @@ Resources:
         Properties:
             GroupDescription: Allow HTTP to our hosts and SSH from local only
             VpcId:
-                Fn::ImportValue:
+                !ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -82,7 +87,7 @@ Resources:
             ImageId: ami-052efd3df9dad4825
             KeyName: !Ref BastionKeyPair
             SubnetId: 
-                Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+                !ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
             SecurityGroupIds: 
                 - Ref: BastionHostSecurityGroup
             InstanceType: t2.micro
@@ -90,7 +95,7 @@ Resources:
                 - Key: Name
                   Value: !Sub ${EnvironmentName} Bastion Host
 
-    WebAppLaunchConfig:
+    WebServerLaunchConfig:
         Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
             UserData:
@@ -111,25 +116,25 @@ Resources:
                   Ebs:
                       VolumeSize: '10'
 
-    WebAppGroup:
+    WebServerGroup:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
-                - Fn::ImportValue:
+                - !ImportValue:
                     !Sub "${EnvironmentName}-PrivateSubnets"
             LaunchConfigurationName:
-                Ref: WebAppLaunchConfig
+                Ref: WebServerLaunchConfig
             MinSize: '2'
             MaxSize: '4'
             TargetGroupARNs:
-                - Ref: WebAppTargetGroup
+                - Ref: WebServerTargetGroup
 
-    WebAppLB:
+    WebServerLB:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
             Subnets:
-                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
-                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet2"
+                - !ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+                - !ImportValue: !Sub "${EnvironmentName}-PublicSubnet2"
             SecurityGroups:
                 - Ref: LBSecurityGroup
 
@@ -139,9 +144,9 @@ Resources:
             DefaultActions:
                 - Type: forward
                   TargetGroupArn: 
-                      Ref: WebAppTargetGroup
+                      Ref: WebServerTargetGroup
             LoadBalancerArn:
-                Ref: WebAppLB
+                Ref: WebServerLB
             Port: '80'
             Protocol: HTTP
         
@@ -151,7 +156,7 @@ Resources:
             Actions:
                 - Type: forward
                   TargetGroupArn: 
-                      Ref: WebAppTargetGroup
+                      Ref: WebServerTargetGroup
             Conditions:
                 - Field: path-pattern
                   Values: [/]
@@ -159,7 +164,7 @@ Resources:
                 Ref: Listener
             Priority: 1
 
-    WebAppTargetGroup:
+    WebServerTargetGroup:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
             HealthCheckIntervalSeconds: 10
@@ -171,13 +176,74 @@ Resources:
             Protocol: HTTP
             UnhealthyThresholdCount: 5
             VpcId: 
-                Fn::ImportValue:
-                    Fn::Sub: "${EnvironmentName}-VPC"
+                !ImportValue:
+                    !Sub: "${EnvironmentName}-VPC"
 
+    FrontendBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: !Ref FrontendBucketName
+            AccessControl: Private
 
+    CloudFrontOriginIdentity:
+        Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+        Properties:
+            CloudFrontOriginAccessIdentityConfig:
+                Comment: CloudFront Origin Access Identity For S3 Frontend
+
+    BucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+            PolicyDocument:
+                Id: CloudFrontOriginAccessIdentity
+                Version: 2012-10-17
+                Statement:
+                - Sid: PublicReadForGetBucketObjects
+                  Effect: Allow
+                  Principal:
+                    AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginIdentity}'
+                  Action: 's3:GetObject'
+                  Resource: !Join ["", [!GetAtt FrontendBucket.Arn, /*]]
+            Bucket: !Ref FrontendBucket
+
+    CloudFrontDistribution:
+        Type: AWS::CloudFront::Distribution
+        Properties:
+            DistributionConfig:
+                Enabled: true
+                Comment: CDN for frontend
+                Origins:
+                    - DomainName: !GetAtt FrontendBucket.RegionalDomainName
+                      Id: !GetAtt FrontendBucket.RegionalDomainName
+                      S3OriginConfig:
+                        OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginIdentity}'
+                ViewerCertificate:
+                    CloudFrontDefaultCertificate: true
+                DefaultCacheBehavior:
+                    TargetOriginId: !GetAtt FrontendBucket.RegionalDomainName
+                    AllowedMethods:
+                        - GET
+                        - HEAD
+                        - OPTIONS
+                        - PUT
+                        - PATCH
+                        - POST
+                        - DELETE
+                    ViewerProtocolPolicy: allow-all
+                    ForwardedValues:
+                        QueryString: False
+                        Cookies:
+                            Forward: none
+                
 Outputs:
-    WebAppDNS:
+    WebServerDNS:
         Description: load balancer DNS Name
-        Value: !Join ["",["http://", !GetAtt WebAppLB.DNSName]]
+        Value: !Join ["",["http://", !GetAtt WebServerLB.DNSName]]
         Export:
             Name: !Sub ${EnvironmentName}-WebAddress
+    
+    CDNURL:
+        Description: CDN URL
+        Value: !GetAtt CloudFrontDistribution.DomainName
+        Export:
+            Name: !Join ["", [!Sub ${EnvironmentName}-WebAddress, /index.html]]
