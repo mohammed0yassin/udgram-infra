@@ -1,0 +1,14 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "Udagram"
+    },
+    {
+        "ParameterKey": "BastionKeyPair",
+        "ParameterValue": "ec2acc"
+    },
+    {
+        "ParameterKey": "WebServerKeyPair",
+        "ParameterValue": "backendprivate"
+    }
+]

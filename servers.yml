@@ -1,0 +1,183 @@
+Description: >  
+    Mohammed Yassin / Udgram Full Stack App / Servers
+
+Parameters:
+
+    EnvironmentName:
+        Description:  An environment name that will be prefixed to resource names
+        Type: String
+
+    BastionKeyPair:
+        Description: The EC2 Key Pair to allow SSH access to the instances
+        Type: 'AWS::EC2::KeyPair::KeyName'
+        ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+    WebServerKeyPair:
+        Description: The EC2 Key Pair to allow SSH access to the instances
+        Type: 'AWS::EC2::KeyPair::KeyName'
+        ConstraintDescription: must be the name of an existing EC2 KeyPair.
+Resources:
+
+    BastionHostSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow SSH to the Bastion Host
+            VpcId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPC"
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 22 
+                  ToPort: 22 
+                  CidrIp: 0.0.0.0/0  
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 0 
+                  ToPort: 65535 
+                  CidrIp: 0.0.0.0/0
+
+    LBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow HTTP to our load balancer
+            VpcId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPC"
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+              
+    WebServerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow HTTP to our hosts and SSH from local only
+            VpcId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPC"
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+                - IpProtocol: tcp
+                  FromPort: 22 
+                  ToPort: 22 
+                  CidrIp: 0.0.0.0/0  
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 0 
+                  ToPort: 65535 
+                  CidrIp: 0.0.0.0/0
+
+    BastionHostInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: ami-052efd3df9dad4825
+            KeyName: !Ref BastionKeyPair
+            SubnetId: 
+                Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+            SecurityGroupIds: 
+                - Ref: BastionHostSecurityGroup
+            InstanceType: t2.micro
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName} Bastion Host
+
+    WebAppLaunchConfig:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties:
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/bin/bash
+                    apt-get update -y
+                    apt-get install unzip -y
+                    curl -sL https://deb.nodesource.com/setup_14.x | sudo bash -
+                    apt-get install nodejs -y
+                    sudo mkdir -p /var/app/current
+            ImageId: ami-052efd3df9dad4825
+            KeyName: !Ref WebServerKeyPair
+            SecurityGroups:
+                - Ref: WebServerSecurityGroup
+            InstanceType: t2.micro
+            BlockDeviceMappings:
+                - DeviceName: "/dev/sdk"
+                  Ebs:
+                      VolumeSize: '10'
+
+    WebAppGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            VPCZoneIdentifier:
+                - Fn::ImportValue:
+                    !Sub "${EnvironmentName}-PrivateSubnets"
+            LaunchConfigurationName:
+                Ref: WebAppLaunchConfig
+            MinSize: '2'
+            MaxSize: '4'
+            TargetGroupARNs:
+                - Ref: WebAppTargetGroup
+
+    WebAppLB:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Subnets:
+                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet2"
+            SecurityGroups:
+                - Ref: LBSecurityGroup
+
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: 
+                      Ref: WebAppTargetGroup
+            LoadBalancerArn:
+                Ref: WebAppLB
+            Port: '80'
+            Protocol: HTTP
+        
+    ALBListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+                - Type: forward
+                  TargetGroupArn: 
+                      Ref: WebAppTargetGroup
+            Conditions:
+                - Field: path-pattern
+                  Values: [/]
+            ListenerArn:
+                Ref: Listener
+            Priority: 1
+
+    WebAppTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 10
+            HealthCheckPath: /
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 8
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            UnhealthyThresholdCount: 5
+            VpcId: 
+                Fn::ImportValue:
+                    Fn::Sub: "${EnvironmentName}-VPC"
+
+
+Outputs:
+    WebAppDNS:
+        Description: load balancer DNS Name
+        Value: !Join ["",["http://", !GetAtt WebAppLB.DNSName]]
+        Export:
+            Name: !Sub ${EnvironmentName}-WebAddress
