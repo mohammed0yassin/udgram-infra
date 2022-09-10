@@ -28,7 +28,7 @@ Resources:
         Properties:
             GroupDescription: Allow SSH to the Bastion Host
             VpcId:
-                !ImportValue:
+                Fn::ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -46,7 +46,7 @@ Resources:
         Properties:
             GroupDescription: Allow HTTP to our load balancer
             VpcId:
-                !ImportValue:
+                Fn::ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -64,7 +64,7 @@ Resources:
         Properties:
             GroupDescription: Allow HTTP to our hosts and SSH from local only
             VpcId:
-                !ImportValue:
+                Fn::ImportValue:
                     !Sub "${EnvironmentName}-VPC"
             SecurityGroupIngress:
                 - IpProtocol: tcp
@@ -87,7 +87,7 @@ Resources:
             ImageId: ami-052efd3df9dad4825
             KeyName: !Ref BastionKeyPair
             SubnetId: 
-                !ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+                Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
             SecurityGroupIds: 
                 - Ref: BastionHostSecurityGroup
             InstanceType: t2.micro
@@ -120,7 +120,7 @@ Resources:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
-                - !ImportValue:
+                - Fn::ImportValue:
                     !Sub "${EnvironmentName}-PrivateSubnets"
             LaunchConfigurationName:
                 Ref: WebServerLaunchConfig
@@ -133,8 +133,8 @@ Resources:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
             Subnets:
-                - !ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
-                - !ImportValue: !Sub "${EnvironmentName}-PublicSubnet2"
+                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet1"
+                - Fn::ImportValue: !Sub "${EnvironmentName}-PublicSubnet2"
             SecurityGroups:
                 - Ref: LBSecurityGroup
 
@@ -176,8 +176,8 @@ Resources:
             Protocol: HTTP
             UnhealthyThresholdCount: 5
             VpcId: 
-                !ImportValue:
-                    !Sub: "${EnvironmentName}-VPC"
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPC"
 
     FrontendBucket:
         Type: AWS::S3::Bucket
@@ -245,10 +245,10 @@ Outputs:
         Description: load balancer DNS Name
         Value: !Join ["",["http://", !GetAtt WebServerLB.DNSName]]
         Export:
-            Name: !Sub ${EnvironmentName}-WebAddress
+            Name: !Sub ${EnvironmentName}-LBUrl
     
-    CDNURL:
-        Description: CDN URL
+    CloudFrontUrl:
+        Description: CloudFront URL
         Value: !GetAtt CloudFrontDistribution.DomainName
         Export:
-            Name: !Join ["", [!Sub ${EnvironmentName}-WebAddress, /index.html]]
+            Name: !Sub ${EnvironmentName}-WebAddress
