@@ -25,11 +25,11 @@ STACK_STATUS="temp"
 sleep_cnt=0
 Hold()
 {
-    while [ "$STACK_STATUS" != "CREATE_COMPLETE" ] || [ "$STACK_STATUS" != "UPDATE_COMPLETE" ]; do
+    while [ $STACK_STATUS != "CREATE_COMPLETE" ] && [ $STACK_STATUS != "UPDATE_COMPLETE" ] ; do
         echo "Waiting for network stack to finalize..."
         STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $NETWORK_STACK_NAME --query Stacks[].StackStatus --output text)
         sleep 10
-        ((sleep_cnt++))
+        sleep_cnt=$((sleep_cnt+1))
         if [ $sleep_cnt -gt 100 ]; then 
             break
         fi
