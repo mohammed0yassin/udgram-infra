@@ -219,6 +219,11 @@ Resources:
                         OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginIdentity}'
                 ViewerCertificate:
                     CloudFrontDefaultCertificate: true
+                CustomErrorResponses:
+                    - ErrorCachingMinTTL: 10
+                      ErrorCode: 403
+                      ResponseCode: 200
+                      ResponsePagePath: /index.html
                 DefaultCacheBehavior:
                     TargetOriginId: !GetAtt FrontendBucket.RegionalDomainName
                     AllowedMethods:
