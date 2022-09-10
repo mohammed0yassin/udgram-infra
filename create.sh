@@ -22,14 +22,41 @@ Help()
 # Hold until network stack is created                                                     #
 ############################################################
 STACK_STATUS="temp"
+sleep_cnt=0
 Hold()
 {
-    while [ $STACK_STATUS != "CREATE_COMPLETE" ]; do
+    while [ "$STACK_STATUS" != "CREATE_COMPLETE" ] || [ "$STACK_STATUS" != "UPDATE_COMPLETE" ]; do
+        echo "Waiting for network stack to finalize..."
         STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $NETWORK_STACK_NAME --query Stacks[].StackStatus --output text)
         sleep 10
+        ((sleep_cnt++))
+        if [ $sleep_cnt -gt 100 ]; then 
+            break
+        fi
     done
-    echo "Create completed"
+    echo "Network Stack completed"
 }
+
+############################################################
+# Cloudformation Management                      #
+############################################################
+runCloudformation()
+{
+    state=$(aws cloudformation $1 --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+    already_exists=$(echo "this $state" | grep -F AlreadyExistsException)
+    no_new_updates=""
+    if [ ! -z "$already_exists" ] ; then
+        echo "$NETWORK_STACK_NAME already exists, Updating..."
+        update_state=$(aws cloudformation update-stack --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+        no_new_updates=$(echo $update_state | grep -F "No updates are to be performed")
+
+    elif [ ! -z "$no_new_updates" ] ; then
+        echo "$2 Has no updates to be performed."
+    else
+        >&2 echo $state
+    fi
+}
+
 ############################################################
 # Process the input options.                               #
 ############################################################
@@ -40,25 +67,22 @@ else
 fi
 if [ "$1" = "--network" ]; then
     if [ $NETWORK_STACK_NAME ]; then
-        aws cloudformation $operation --stack-name $NETWORK_STACK_NAME --template-body file://network.yml  --parameters file://network-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION \
-        || aws cloudformation update-stack --stack-name $NETWORK_STACK_NAME --template-body file://network.yml  --parameters file://network-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION
+        runCloudformation $operation $NETWORK_STACK_NAME "network"
         Hold
     else
         >&2 echo "NETWORK_STACK_NAME environment variable is empty"; exit 1;
     fi
 elif [ "$1" = "--servers" ]; then
     if [ $SERVERS_STACK_NAME ]; then
-        aws cloudformation $operation --stack-name $SERVERS_STACK_NAME --template-body file://servers.yml  --parameters file://server-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION \
-        || aws cloudformation update-stack --stack-name $SERVERS_STACK_NAME --template-body file://servers.yml  --parameters file://server-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION
+        runCloudformation $operation $SERVERS_STACK_NAME "servers"
     else
         >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
     fi
 elif [ "$1" = "--database" ]; then
     if [ $SERVERS_STACK_NAME ]; then
-        aws cloudformation $operation --stack-name $DATABASE_STACK_NAME --template-body file://database.yml  --parameters file://database-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION \
-        || aws cloudformation update-stack --stack-name $DATABASE_STACK_NAME --template-body file://database.yml  --parameters file://database-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION        
+        runCloudformation $operation $DATABASE_STACK_NAME "database"
     else
-        >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
+        >&2 echo "DATABASE_STACK_NAME environment variable is empty"; exit 1;
     fi
 elif [ "$1" = "--help" -o "$1" = "-h" ]; then
     Help
