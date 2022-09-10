@@ -38,14 +38,20 @@ jobs:
 workflows:
   udagram-infra:
     jobs:
-      - create_network
+      - create_network:
+          context:
+            - Udgram
       - hold:
           type: approval
           requires: 
           - create_network
       - create_servers:
+          context:
+            - Udgram
           requires:
             - hold
       - create_database:
+          context:
+            - Udgram
           requires:
             - hold
