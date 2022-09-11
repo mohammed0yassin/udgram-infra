@@ -47,16 +47,17 @@ sleep_cnt=0
 Hold()
 {
     while [ $STACK_STATUS != "CREATE_COMPLETE" ] && [ $STACK_STATUS != "UPDATE_COMPLETE" ] ; do
-        echo "Waiting for network stack to finalize..."
-        STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $NETWORK_STACK_NAME --query Stacks[].StackStatus --output text)
+        echo "Waiting for $2 stack to finalize..."
+        STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $1 --query Stacks[].StackStatus --output text)
         sleep 10
         echo $STACK_STATUS
         sleep_cnt=$((sleep_cnt+1))
         if [ $sleep_cnt -gt 100 ]; then 
+            >&2 echo "FAILED: Stack took too long to finalize"
             break
         fi
     done
-    echo "Network Stack Completed"
+    echo "$2 Stack Completed"
 }
 ############################################################
 # Process the input options.                               #
@@ -69,19 +70,21 @@ fi
 if [ "$1" = "--network" ]; then
     if [ $NETWORK_STACK_NAME ]; then
         runCloudformation $operation $NETWORK_STACK_NAME "network"
-        Hold
+        Hold $NETWORK_STACK_NAME "Network"
     else
         >&2 echo "NETWORK_STACK_NAME environment variable is empty"; exit 1;
     fi
 elif [ "$1" = "--servers" ]; then
     if [ $SERVERS_STACK_NAME ]; then
         runCloudformation $operation $SERVERS_STACK_NAME "servers"
+        Hold() $SERVERS_STACK_NAME "Servers"
     else
         >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
     fi
 elif [ "$1" = "--database" ]; then
-    if [ $SERVERS_STACK_NAME ]; then
+    if [ $DATABASE_STACK_NAME ]; then
         runCloudformation $operation $DATABASE_STACK_NAME "database"
+        Hold $DATABASE_STACK_NAME "Database"
     else
         >&2 echo "DATABASE_STACK_NAME environment variable is empty"; exit 1;
     fi

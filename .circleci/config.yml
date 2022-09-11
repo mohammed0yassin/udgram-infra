@@ -41,17 +41,13 @@ workflows:
       - create_network:
           context:
             - Udgram
-      # - hold:
-      #     type: approval
-      #     requires: 
-      #     - create_network
-      - create_servers:
-          context:
-            - Udgram
-          requires:
-            - create_network
       - create_database:
           context:
             - Udgram
           requires:
             - create_network
+      - create_servers:
+          context:
+            - Udgram
+          requires:
+            - create_database
