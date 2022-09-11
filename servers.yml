@@ -95,6 +95,33 @@ Resources:
                 - Key: Name
                   Value: !Sub ${EnvironmentName} Bastion Host
 
+    S3ReadOnlyEC2:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument: 
+                Version: 2012-10-17
+                Statement: 
+                    - Effect: "Allow"
+                      Principal: 
+                        Service: 
+                            - "ec2.amazonaws.com"
+                      Action: 
+                          - "sts:AssumeRole"
+            Policies:
+                - PolicyName: S3ReadOnlyAccess
+                  PolicyDocument:
+                    Version: 2012-10-17   
+                    Statement:
+                        - Effect: "Allow"
+                          Action: 's3:GetObject'
+                          Resource: !Join ["", [!GetAtt FrontendBucket.Arn, /*]]
+
+    ProfileWithRolesForWebServers:
+        Type: AWS::IAM::InstanceProfile
+        Properties: 
+            Roles:
+            - !Ref S3ReadOnlyEC2
+
     WebServerLaunchConfig:
         Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
@@ -116,6 +143,7 @@ Resources:
                     npm run start &
             ImageId: ami-052efd3df9dad4825
             KeyName: !Ref WebServerKeyPair
+            IamInstanceProfile: !Ref ProfileWithRolesForWebServers
             SecurityGroups:
                 - Ref: WebServerSecurityGroup
             InstanceType: t2.micro
