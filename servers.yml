@@ -95,7 +95,7 @@ Resources:
                 - Key: Name
                   Value: !Sub ${EnvironmentName} Bastion Host
 
-    S3ReadOnlyEC2:
+    DBSecretS3ReadOnlyEC2:
         Type: AWS::IAM::Role
         Properties:
             AssumeRolePolicyDocument: 
@@ -113,34 +113,54 @@ Resources:
                     Version: 2012-10-17   
                     Statement:
                         - Effect: "Allow"
-                          Action: 's3:GetObject'
+                          Action: "s3:GetObject"
                           Resource: !Join ["", [!GetAtt FrontendBucket.Arn, /*]]
+                - PolicyName: DBSecretAccess
+                  PolicyDocument:
+                    Version: 2012-10-17   
+                    Statement:
+                        - Effect: "Allow"
+                          Action: [ "secretsmanager:GetSecretValue", "kms:Decrypt", "kms:DescribeKey" ]
+                          Resource: "*"
 
     ProfileWithRolesForWebServers:
         Type: AWS::IAM::InstanceProfile
         Properties: 
             Roles:
-            - !Ref S3ReadOnlyEC2
+            - !Ref DBSecretS3ReadOnlyEC2
 
     WebServerLaunchConfig:
         Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
             UserData:
-                Fn::Base64: !Sub |
+                Fn::Base64: !Sub 
+                  - |
                     #!/bin/bash
                     apt-get update -y
                     apt-get install unzip -y
+                    sudo apt install jq -y
                     curl -sL https://deb.nodesource.com/setup_14.x | sudo bash -
                     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
                     unzip awscliv2.zip
                     sudo ./aws/install
                     apt-get install nodejs -y
+                    export POSTGRES_HOST=${DatabaseEndpoint}
+                    export POSTGRES_USERNAME=$(aws secretsmanager get-secret-value --region us-east-1 --secret-id ${DatabaseSecret} --query SecretString --output text | jq -r .username)
+                    export POSTGRES_PASSWORD=$(aws secretsmanager get-secret-value --region us-east-1 --secret-id ${DatabaseSecret} --query SecretString --output text | jq -r .password)
+                    export POSTGRES_DB=postgres
+                    export PORT=80
+                    export JWT_SECRET=sometestsecret
                     sudo mkdir -p /var/app/current
                     cd /var/app/current
                     aws s3 cp s3://${FrontendBucketName}/Archive.zip .
                     unzip Archive.zip
                     npm install
                     npm run start &
+                  - DatabaseEndpoint:
+                        Fn::ImportValue: !Sub "${EnvironmentName}-DatabaseEndpoint"
+                    DatabaseSecret:
+                        Fn::ImportValue: !Sub "${EnvironmentName}-DatabaseSecret"
+
             ImageId: ami-052efd3df9dad4825
             KeyName: !Ref WebServerKeyPair
             IamInstanceProfile: !Ref ProfileWithRolesForWebServers

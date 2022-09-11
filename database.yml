@@ -87,3 +87,16 @@ Outputs:
     Value: !GetAtt PgSQLInstance.Endpoint.Address
     Export:
         Name: !Sub ${EnvironmentName}-DatabaseEndpoint
+
+  DatabaseSecret:
+    Description: The Database Secret
+    Value: !Ref PgSQLSecret
+    Export:
+        Name: !Sub ${EnvironmentName}-DatabaseSecret
+
+  # DatabaseSecretName:
+  #   Description: The Database Secret
+  #   Value: 
+  #     Fn::Select: [ "6", { Fn::Split: [ ":", { Ref: "PgSQLSecret" }]}]
+  #   Export:
+  #       Name: !Sub ${EnvironmentName}-DatabaseSecretName
