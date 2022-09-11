@@ -29,8 +29,8 @@ if [ "$1" = "--network" ]; then
     fi
 elif [ "$1" = "--servers" ]; then
     if [ $SERVERS_STACK_NAME ]; then
-        line_number=$(grep -A 1 -n FrontendBucketName server-parameters.json | tail -1 | cut -f1 -d-)
-        s3bucketname=$(awk -F\" 'NR == '$line_number' {print $4}' server-parameters.json)
+        line_number=$(grep -A 1 -n FrontendBucketName servers-parameters.json | tail -1 | cut -f1 -d-)
+        s3bucketname=$(awk -F\" 'NR == '$line_number' {print $4}' servers-parameters.json)
         aws s3 rm s3://$s3bucketname --recursive
         aws cloudformation delete-stack --stack-name $SERVERS_STACK_NAME
     else

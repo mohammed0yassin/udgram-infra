@@ -18,8 +18,29 @@ Help()
    echo
 }
 
+
 ############################################################
-# Hold until network stack is created                                                     #
+# Cloudformation Management                                #
+############################################################
+runCloudformation()
+{
+    state=$(aws cloudformation $1 --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+    already_exists=$(echo "$state" | grep -F AlreadyExistsException)
+    no_new_updates=""
+    if [ ! -z "$already_exists" ] ; then
+        echo "$NETWORK_STACK_NAME already exists, Updating..."
+        state=$(aws cloudformation update-stack --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+    fi
+    no_new_updates=$(echo "$state" | grep -F "No updates are to be performed")
+    if [ ! -z "$no_new_updates" ] ; then
+        echo "$2 Has no updates to be performed."
+        return 1
+    fi
+    >&2 echo $state
+
+}
+############################################################
+# Hold until network stack is created                      #
 ############################################################
 STACK_STATUS="temp"
 sleep_cnt=0
@@ -29,34 +50,14 @@ Hold()
         echo "Waiting for network stack to finalize..."
         STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $NETWORK_STACK_NAME --query Stacks[].StackStatus --output text)
         sleep 10
+        echo $STACK_STATUS
         sleep_cnt=$((sleep_cnt+1))
         if [ $sleep_cnt -gt 100 ]; then 
             break
         fi
     done
-    echo "Network Stack completed"
+    echo "Network Stack Completed"
 }
-
-############################################################
-# Cloudformation Management                      #
-############################################################
-runCloudformation()
-{
-    state=$(aws cloudformation $1 --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
-    already_exists=$(echo "this $state" | grep -F AlreadyExistsException)
-    no_new_updates=""
-    if [ ! -z "$already_exists" ] ; then
-        echo "$NETWORK_STACK_NAME already exists, Updating..."
-        update_state=$(aws cloudformation update-stack --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
-        no_new_updates=$(echo $update_state | grep -F "No updates are to be performed")
-
-    elif [ ! -z "$no_new_updates" ] ; then
-        echo "$2 Has no updates to be performed."
-    else
-        >&2 echo $state
-    fi
-}
-
 ############################################################
 # Process the input options.                               #
 ############################################################

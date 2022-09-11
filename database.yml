@@ -13,6 +13,7 @@ Parameters:
     Description: Database admin user name for PgSQL
 
 Resources:
+
   PgSQLSecretKey:
     Type: AWS::KMS::Key
     Properties:
@@ -78,3 +79,11 @@ Resources:
         - !Ref PgSQLSecurityGroup
       DBSubnetGroupName:
         !Ref PgSQLSubnetGroup
+
+Outputs:
+
+  DatabaseEndpoint:
+    Description: The Database connection endpoint
+    Value: !GetAtt PgSQLInstance.Endpoint.Address
+    Export:
+        Name: !Sub ${EnvironmentName}-DatabaseEndpoint
