@@ -34,7 +34,7 @@ runCloudformation()
     no_new_updates=$(echo "$state" | grep -F "No updates are to be performed")
     if [ ! -z "$no_new_updates" ] ; then
         echo "$2 Has no updates to be performed."
-        return 1
+        return 0
     fi
     >&2 echo $state
 
