@@ -1,5 +1,7 @@
 # Udgram infrastructure
 
+![Diagram](./FullStackUdagram-app.png)
+
 ## Required Environment Variables
 | Environment Variable   | Description                                  |
 |         :-:            |     :-:                                      |

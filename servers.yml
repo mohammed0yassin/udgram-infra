@@ -315,3 +315,10 @@ Outputs:
         Value: !GetAtt CloudFrontDistribution.DomainName
         Export:
             Name: !Sub ${EnvironmentName}-WebAddress
+                
+    FrontEndBucket:
+        Description: Frontend bucket name
+        Value:
+            Fn::Select: [ "0", { Fn::Split: [ ":::", { Ref: "FrontendBucket" }]}]
+        Export:
+            Name: !Sub ${EnvironmentName}-FrontEndBucketName
