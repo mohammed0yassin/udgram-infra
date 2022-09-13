@@ -28,7 +28,7 @@ runCloudformation()
     already_exists=$(echo "$state" | grep -F AlreadyExistsException)
     no_new_updates=""
     if [ ! -z "$already_exists" ] ; then
-        echo "$NETWORK_STACK_NAME already exists, Updating..."
+        echo "$2 already exists, Updating..."
         state=$(aws cloudformation update-stack --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
     fi
     no_new_updates=$(echo "$state" | grep -F "No updates are to be performed")
@@ -77,7 +77,7 @@ if [ "$1" = "--network" ]; then
 elif [ "$1" = "--servers" ]; then
     if [ $SERVERS_STACK_NAME ]; then
         runCloudformation $operation $SERVERS_STACK_NAME "servers"
-        Hold() $SERVERS_STACK_NAME "Servers"
+        Hold $SERVERS_STACK_NAME "Servers"
     else
         >&2 echo "SERVERS_STACK_NAME environment variable is empty"; exit 1;
     fi
