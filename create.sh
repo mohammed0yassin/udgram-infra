@@ -52,9 +52,9 @@ Hold()
         sleep 10
         echo $STACK_STATUS
         sleep_cnt=$((sleep_cnt+1))
-        if [ $sleep_cnt -gt 100 ]; then 
+        if [ $sleep_cnt -gt 150 ]; then 
             >&2 echo "FAILED: Stack took too long to finalize"
-            break
+            exit 1
         fi
     done
     echo "$2 Stack Completed"
