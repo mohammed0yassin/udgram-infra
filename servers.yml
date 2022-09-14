@@ -172,7 +172,7 @@ Resources:
                   Ebs:
                       VolumeSize: '10'
 
-    WebServerGroup:
+    WebServerAutoScalingGroup:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
@@ -182,8 +182,13 @@ Resources:
                 Ref: WebServerLaunchConfig
             MinSize: '2'
             MaxSize: '4'
+            HealthCheckType: ELB
             TargetGroupARNs:
                 - Ref: WebServerTargetGroup
+            Tags:
+                - Key: Deployment
+                  Value: Green
+                  PropagateAtLaunch: true
 
     WebServerLB:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -223,7 +228,7 @@ Resources:
     WebServerTargetGroup:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
-            HealthCheckIntervalSeconds: 10
+            HealthCheckIntervalSeconds: 40
             HealthCheckPath: /
             HealthCheckProtocol: HTTP
             HealthCheckTimeoutSeconds: 8
@@ -322,3 +327,21 @@ Outputs:
             Fn::Select: [ "0", { Fn::Split: [ ":::", { Ref: "FrontendBucket" }]}]
         Export:
             Name: !Sub ${EnvironmentName}-FrontEndBucketName
+
+    ProfileWithRolesForWebServers:
+        Description: Profile that has the roles for the web server instances
+        Value: !GetAtt ProfileWithRolesForWebServers.Arn
+        Export:
+            Name: !Sub ${EnvironmentName}-ProfileWithRolesForWebServers
+
+    WebServerTargetGroup:
+        Description: Target Group for the loadbalancer 
+        Value: !Ref WebServerTargetGroup
+        Export:
+            Name: !Sub ${EnvironmentName}-WebServerTargetGroup
+
+    WebServerLaunchConfig:
+        Description: Launch Configuration for Auto Scaling Groups
+        Value: !Ref WebServerLaunchConfig
+        Export:
+            Name: !Sub ${EnvironmentName}-WebServerLaunchConfig
