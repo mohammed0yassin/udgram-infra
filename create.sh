@@ -25,11 +25,19 @@ Help()
 runCloudformation()
 {
     state=$(aws cloudformation $1 --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+    created=$(echo "$state" | grep -F StackId)
+    if [ ! -z "$created" ]; then
+        return 0
+    fi
     already_exists=$(echo "$state" | grep -F AlreadyExistsException)
     no_new_updates=""
     if [ ! -z "$already_exists" ] ; then
         echo "$2 already exists, Updating..."
         state=$(aws cloudformation update-stack --stack-name $2 --template-body file://$3.yml  --parameters file://$3-parameters.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$AWS_REGION 2>&1)
+    fi
+    updated=$(echo "$state" | grep -F StackId)
+    if [ ! -z "$updated" ]; then
+        return 0
     fi
     no_new_updates=$(echo "$state" | grep -F "No updates are to be performed")
     if [ ! -z "$no_new_updates" ] ; then
@@ -37,6 +45,7 @@ runCloudformation()
         return 0
     fi
     >&2 echo $state
+    exit 1
 
 }
 ############################################################
